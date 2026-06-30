@@ -1,14 +1,13 @@
 {
-  "name": "bronx-voice-changer-v2",
-  "version": "2.0.0",
-  "description": "BRONX ULTIMATE VOICE CHANGER - Male to Female AI",
+  "name": "bronx-voice-changer-v3",
+  "version": "3.0.0",
+  "description": "BRONX ULTIMATE VOICE CHANGER - Real Female Voice",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "multer": "^1.4.5-lts.1",
-    "fluent-ffmpeg": "^2.1.2"
+    "multer": "^1.4.5-lts.1"
   }
 }
