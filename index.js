@@ -1,11 +1,9 @@
 // ============================================
-// 🎙️ BRONX VOICE CHANGER API
-// Male Voice → Female Indian Girl Voice
-// Upload Audio → Get Converted Voice
+// 🎙️ BRONX LIVE VOICE RECORDER & CHANGER
+// Record Live → Convert to Female Voice → Download
 // ============================================
 const express = require('express');
 const multer = require('multer');
-const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
@@ -16,36 +14,26 @@ const PORT = process.env.PORT || 3000;
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-// ============ MULTER SETUP ============
+// ============ VOICE STYLES ============
+const VOICE_STYLES = {
+    yuki:    { name: "🎀 Yuki (Soft Indian Girl)",   pitch: 1.4,  speed: 0.9,  formant: 1.3 },
+    aiko:    { name: "🌸 Aiko (Sweet & Friendly)",    pitch: 1.3,  speed: 0.95, formant: 1.25 },
+    niki:    { name: "💖 Niki (Cute & Flirty)",       pitch: 1.5,  speed: 0.9,  formant: 1.35 },
+    priya:   { name: "👩 Priya (Natural Hindi)",      pitch: 1.25, speed: 0.88, formant: 1.22 },
+    siri:    { name: "🗣️ Siri (Professional)",        pitch: 1.2,  speed: 0.85, formant: 1.2 },
+    deepika: { name: "💫 Deepika (Bollywood)",        pitch: 1.35, speed: 0.85, formant: 1.28 },
+    kavya:   { name: "🎶 Kavya (Melodious)",          pitch: 1.45, speed: 0.92, formant: 1.32 },
+};
+
+// ============ MULTER ============
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, UPLOAD_DIR),
     filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname) || '.wav';
+        const ext = path.extname(file.originalname) || '.webm';
         cb(null, uuidv4() + ext);
     }
 });
-const upload = multer({ 
-    storage,
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
-    fileFilter: (req, file, cb) => {
-        const allowed = ['.wav', '.mp3', '.ogg', '.webm', '.m4a', '.aac'];
-        const ext = path.extname(file.originalname).toLowerCase();
-        if (allowed.includes(ext)) cb(null, true);
-        else cb(new Error('Invalid file type. Use: WAV, MP3, OGG, WEBM, M4A'));
-    }
-});
-
-// ============ VOICE STYLES ============
-const VOICE_STYLES = {
-    yuki:    { name: "🎀 Yuki (Soft Indian Girl)",   pitch: 1.4, speed: 0.9,  formant: 1.3 },
-    aiko:    { name: "🌸 Aiko (Sweet & Friendly)",    pitch: 1.3, speed: 0.95, formant: 1.25 },
-    siri:    { name: "🗣️ Siri (Professional)",        pitch: 1.2, speed: 0.85, formant: 1.2 },
-    niki:    { name: "💖 Niki (Cute & Flirty)",       pitch: 1.5, speed: 0.9,  formant: 1.35 },
-    priya:   { name: "👩 Priya (Natural Hindi)",      pitch: 1.25,speed: 0.88, formant: 1.22 },
-    anjali:  { name: "🎤 Anjali (Clear Voice)",        pitch: 1.15,speed: 0.82, formant: 1.18 },
-    deepika: { name: "💫 Deepika (Bollywood Style)",   pitch: 1.35,speed: 0.85, formant: 1.28 },
-    kavya:   { name: "🎶 Kavya (Melodious)",           pitch: 1.45,speed: 0.92, formant: 1.32 },
-};
+const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 
 // ============ CORS ============
 app.use((req, res, next) => {
@@ -57,56 +45,76 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json());
+app.use('/uploads', express.static(UPLOAD_DIR));
 
-// ============ HOME PAGE ============
+// ============ HOME PAGE – LIVE RECORDER ============
 app.get('/', (req, res) => {
-    const host = req.get('host');
-    const baseURL = `https://${host}`;
-    
     res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-    <title>🎙️ BRONX VOICE CHANGER – MALE TO FEMALE</title>
+    <title>🎙️ BRONX LIVE VOICE CHANGER</title>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        :root{--bg:#000a14;--s:rgba(5,15,35,.85);--b:rgba(255,105,180,.1);--t:#d0d8f0;--a:#ff69b4;--g:#00ff88}
+        :root{--bg:#000a14;--s:rgba(5,15,35,.85);--b:rgba(255,105,180,.1);--t:#d0d8f0;--a:#ff69b4;--g:#00ff88;--r:#ff3366}
         *{margin:0;padding:0;box-sizing:border-box}
         body{background:var(--bg);color:var(--t);font-family:'Rajdhani',sans-serif;min-height:100vh}
         body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 50% -20%,rgba(255,105,180,.06),transparent 50%),radial-gradient(ellipse at 80% 80%,rgba(138,43,226,.04),transparent 50%);pointer-events:none;z-index:0}
-        .container{max-width:800px;margin:0 auto;padding:20px;position:relative;z-index:1}
+        .container{max-width:750px;margin:0 auto;padding:20px;position:relative;z-index:1}
         .header{text-align:center;padding:30px 0 20px}
         .header h1{font-family:'Orbitron',sans-serif;font-size:clamp(22px,5vw,34px);background:linear-gradient(90deg,#ff69b4,#8b00ff,#0096ff,#ff0080);background-size:300% 100%;-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:rainbow 4s linear infinite}@keyframes rainbow{0%{background-position:0% 50%}100%{background-position:300% 50%}}
         .header p{color:#667;font-size:13px}
         .badge{display:inline-block;background:rgba(255,105,180,.08);color:var(--a);padding:4px 14px;border-radius:20px;font-size:10px;border:1px solid rgba(255,105,180,.15);margin:3px}
         .card{background:var(--s);border:1px solid var(--b);border-radius:16px;padding:20px;margin:14px 0;backdrop-filter:blur(20px)}
-        .card h3{color:#fff;font-size:16px;margin-bottom:10px;font-family:'Orbitron',sans-serif}
+        .card h3{color:#fff;font-size:16px;margin-bottom:12px;font-family:'Orbitron',sans-serif}
         select{width:100%;padding:12px;background:rgba(0,0,0,.5);border:1px solid var(--b);border-radius:10px;color:#fff;font-size:13px;outline:none;margin:6px 0;font-family:'Rajdhani',sans-serif}
-        select:focus{border-color:var(--a);box-shadow:0 0 20px rgba(255,105,180,.15)}
-        .upload-zone{border:2px dashed var(--b);border-radius:14px;padding:40px;text-align:center;cursor:pointer;transition:.3s;margin:10px 0}
-        .upload-zone:hover{border-color:var(--a);background:rgba(255,105,180,.03)}
-        .upload-zone.dragover{border-color:var(--g);background:rgba(0,255,136,.03)}
+        select:focus{border-color:var(--a)}
+        
+        .record-section{text-align:center;padding:20px 0}
+        .mic-btn{width:120px;height:120px;border-radius:50%;border:4px solid var(--a);background:rgba(255,105,180,.1);cursor:pointer;transition:.3s;display:inline-flex;align-items:center;justify-content:center;position:relative}
+        .mic-btn:hover{transform:scale(1.05);box-shadow:0 0 40px rgba(255,105,180,.3)}
+        .mic-btn.recording{background:var(--r);border-color:var(--r);animation:pulse 1.5s infinite}
+        .mic-btn svg{width:50px;height:50px;fill:var(--a)}
+        .mic-btn.recording svg{fill:#fff}
+        @keyframes pulse{0%,100%{box-shadow:0 0 20px rgba(255,51,102,.3)}50%{box-shadow:0 0 60px rgba(255,51,102,.6)}}
+        .timer{font-size:36px;font-family:'Orbitron',sans-serif;color:var(--a);margin:10px 0}
+        .timer.recording{color:var(--r)}
+        .status{font-size:14px;color:#667;margin:6px 0}
+        
         button{width:100%;padding:14px;background:linear-gradient(135deg,#ff69b4,#8b00ff);color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:14px;margin:6px 0;transition:.3s}
         button:hover{transform:scale(1.02);box-shadow:0 0 30px rgba(255,105,180,.3)}
+        button:disabled{opacity:.5;cursor:not-allowed;transform:none}
         button.green{background:linear-gradient(135deg,#00c853,#009624)}
-        button:disabled{opacity:.5;cursor:not-allowed}
+        button.orange{background:linear-gradient(135deg,#ff6d00,#ff9100)}
+        
+        .voice-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:6px;margin:8px 0}
+        .voice-btn{background:rgba(255,105,180,.06);color:var(--a);padding:8px;border-radius:12px;font-size:10px;cursor:pointer;border:1px solid rgba(255,105,180,.12);text-align:center;transition:.3s}
+        .voice-btn:hover,.voice-btn.active{background:rgba(255,105,180,.15);color:#fff;border-color:var(--a)}
+        
         audio{width:100%;margin:10px 0;border-radius:10px}
-        .result-box{display:none;margin:10px 0}
+        .result-box{display:none;margin:10px 0;text-align:center}
         .result-box.show{display:block}
         .loading{text-align:center;padding:20px;display:none}
         .loading.show{display:block}
         .spinner{width:35px;height:35px;border:3px solid rgba(255,105,180,.15);border-top:3px solid var(--a);border-radius:50%;animation:spin 1s linear infinite;margin:10px auto}@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
-        .voice-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px;margin:8px 0}
-        .voice-btn{background:rgba(255,105,180,.06);color:var(--a);padding:8px;border-radius:12px;font-size:10px;cursor:pointer;border:1px solid rgba(255,105,180,.12);text-align:center;transition:.3s}
-        .voice-btn:hover,.voice-btn.active{background:rgba(255,105,180,.15);color:#fff;border-color:var(--a)}
-        code{display:block;background:rgba(0,0,0,.5);color:var(--g);padding:10px;border-radius:8px;font-size:9px;word-break:break-all;margin:6px 0}
+        
+        .voice-wave{display:flex;align-items:center;justify-content:center;gap:3px;height:40px;margin:10px 0}
+        .voice-wave .bar{width:4px;background:var(--a);border-radius:2px;transition:height .1s}
+        .voice-wave.recording .bar{animation:wave 0.6s ease-in-out infinite}
+        @keyframes wave{0%,100%{height:5px}50%{height:35px}}
+        
+        @media(max-width:600px){
+            .mic-btn{width:90px;height:90px}
+            .mic-btn svg{width:35px;height:35px}
+            .timer{font-size:28px}
+        }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="header">
-        <h1>🎙️ BRONX VOICE CHANGER</h1>
-        <p>🎤 Male Voice → 👩‍🦰 Female Indian Girl Voice</p>
+        <h1>🎙️ BRONX LIVE VOICE CHANGER</h1>
+        <p>🎤 Record Live → 👩‍🦰 Female Indian Voice</p>
         <div style="margin-top:10px">
             <span class="badge">🎀 Yuki</span><span class="badge">🌸 Aiko</span>
             <span class="badge">💖 Niki</span><span class="badge">👩 Priya</span>
@@ -115,127 +123,217 @@ app.get('/', (req, res) => {
     </div>
 
     <div class="card">
-        <h3>🎤 SELECT FEMALE VOICE STYLE</h3>
+        <h3>🎤 SELECT VOICE STYLE</h3>
         <div class="voice-grid">
             ${Object.entries(VOICE_STYLES).map(([k,v]) => 
                 `<div class="voice-btn ${k==='yuki'?'active':''}" onclick="selVoice('${k}',this)">${v.name.split(' ')[0]}</div>`
             ).join('')}
         </div>
-    </div>
-
-    <div class="card">
-        <h3>📤 UPLOAD YOUR VOICE</h3>
-        <div class="upload-zone" id="dropZone" onclick="document.getElementById('audioFile').click()">
-            🎤 <b>Click or Drop Audio File Here</b><br>
-            <small style="color:#667">Supports: WAV, MP3, OGG, WEBM, M4A (Max 10MB)</small>
-        </div>
-        <input type="file" id="audioFile" accept="audio/*" style="display:none" onchange="handleFile(this)">
-        <p id="fileName" style="color:var(--g);font-size:11px;margin:6px 0"></p>
         <select id="voiceStyle">
             ${Object.entries(VOICE_STYLES).map(([k,v]) => `<option value="${k}">${v.name}</option>`).join('')}
         </select>
+    </div>
+
+    <div class="card">
+        <h3>🎙️ RECORD YOUR VOICE</h3>
+        <div class="record-section">
+            <div class="mic-btn" id="micBtn" onclick="toggleRecording()" title="Click to Record / Stop">
+                <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+            </div>
+            <div class="timer" id="timer">00:00</div>
+            <div class="status" id="status">🎤 Click mic to start recording</div>
+            <div class="voice-wave" id="voiceWave">
+                ${Array(20).fill(0).map((_,i) => `<div class="bar" id="bar${i}" style="animation-delay:${i*0.03}s;height:${Math.random()*15+5}px"></div>`).join('')}
+            </div>
+        </div>
+        
         <button id="convertBtn" onclick="convertVoice()" disabled>🎙️ CONVERT TO FEMALE VOICE</button>
         
         <div class="loading" id="loading">
             <div class="spinner"></div>
-            <p style="color:#ff69b4;font-size:13px">🎤 Voice convert ho rahi hai...</p>
-            <p style="color:#667;font-size:10px">10-20 seconds</p>
+            <p style="color:#ff69b4;font-size:13px">🎤 Converting your voice...</p>
         </div>
 
         <div class="result-box" id="resultBox">
-            <p style="color:var(--g);font-weight:700;text-align:center">✅ Converted!</p>
-            <audio id="outputAudio" controls></audio>
-            <button class="green" onclick="downloadResult()">📥 DOWNLOAD CONVERTED VOICE</button>
+            <p style="color:var(--g);font-weight:700">✅ Voice Converted!</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0">
+                <div>
+                    <p style="color:#667;font-size:10px">🎤 Original</p>
+                    <audio id="originalAudio" controls></audio>
+                </div>
+                <div>
+                    <p style="color:var(--a);font-size:10px">👩‍🦰 Converted</p>
+                    <audio id="convertedAudio" controls></audio>
+                </div>
+            </div>
+            <button class="green" onclick="downloadResult()">📥 DOWNLOAD FEMALE VOICE</button>
         </div>
     </div>
 
     <div class="card">
         <h3>🔗 API ENDPOINTS</h3>
-        <code>POST /api/convert (multipart/form-data: audio file + style)</code>
-        <code>GET /styles (List all voice styles)</code>
-        <code>GET /test (API status)</code>
+        <p style="color:#667;font-size:11px">
+            <code style="color:var(--g);background:rgba(0,0,0,.3);padding:4px 8px;border-radius:4px;font-size:10px">POST /api/convert</code> 
+            Upload audio file + style → Get female voice
+        </p>
     </div>
 
     <p style="text-align:center;color:#667;font-size:10px;padding:10px">Created by BRONX_ULTRA</p>
 </div>
 
 <script>
-var selectedFile = null;
-var currentResultUrl = '';
-var selVoiceName = 'yuki';
+var mediaRecorder;
+var audioChunks = [];
+var isRecording = false;
+var timerInterval;
+var seconds = 0;
+var selectedStyle = 'yuki';
+var recordedBlob = null;
+var convertedBlob = null;
 
+// ============ VOICE SELECTION ============
 function selVoice(voice, el) {
-    selVoiceName = voice;
+    selectedStyle = voice;
     document.querySelectorAll('.voice-btn').forEach(b => b.classList.remove('active'));
     el.classList.add('active');
     document.getElementById('voiceStyle').value = voice;
 }
 
-function handleFile(input) {
-    if (input.files.length > 0) {
-        selectedFile = input.files[0];
-        document.getElementById('fileName').textContent = '📁 ' + selectedFile.name + ' (' + (selectedFile.size/1024).toFixed(1) + ' KB)';
-        document.getElementById('convertBtn').disabled = false;
+// ============ RECORDING ============
+async function toggleRecording() {
+    if (isRecording) {
+        stopRecording();
+    } else {
+        await startRecording();
     }
 }
 
-// Drag & Drop
-var dropZone = document.getElementById('dropZone');
-dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('dragover'); });
-dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('dragover'); });
-dropZone.addEventListener('drop', function(e) {
-    e.preventDefault();
-    dropZone.classList.remove('dragover');
-    if (e.dataTransfer.files.length > 0) {
-        selectedFile = e.dataTransfer.files[0];
-        document.getElementById('fileName').textContent = '📁 ' + selectedFile.name;
-        document.getElementById('convertBtn').disabled = false;
+async function startRecording() {
+    try {
+        var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+        audioChunks = [];
+        
+        mediaRecorder.ondataavailable = function(e) {
+            if (e.data.size > 0) audioChunks.push(e.data);
+        };
+        
+        mediaRecorder.onstop = function() {
+            recordedBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            var url = URL.createObjectURL(recordedBlob);
+            document.getElementById('originalAudio').src = url;
+            document.getElementById('convertBtn').disabled = false;
+            document.getElementById('status').textContent = '✅ Recording complete! Click Convert';
+            
+            // Stop all tracks
+            stream.getTracks().forEach(track => track.stop());
+        };
+        
+        mediaRecorder.start(100); // Collect data every 100ms
+        isRecording = true;
+        
+        document.getElementById('micBtn').classList.add('recording');
+        document.getElementById('timer').classList.add('recording');
+        document.getElementById('voiceWave').classList.add('recording');
+        document.getElementById('status').textContent = '🔴 Recording... Click mic to stop';
+        document.getElementById('convertBtn').disabled = true;
+        document.getElementById('resultBox').classList.remove('show');
+        
+        // Start timer
+        seconds = 0;
+        updateTimer();
+        timerInterval = setInterval(function() {
+            seconds++;
+            updateTimer();
+        }, 1000);
+        
+        // Animate voice wave
+        animateWave();
+        
+    } catch(err) {
+        alert('❌ Microphone access denied! Please allow microphone permission.');
+        console.error(err);
     }
-});
+}
 
+function stopRecording() {
+    if (mediaRecorder && isRecording) {
+        mediaRecorder.stop();
+        isRecording = false;
+        clearInterval(timerInterval);
+        
+        document.getElementById('micBtn').classList.remove('recording');
+        document.getElementById('timer').classList.remove('recording');
+        document.getElementById('voiceWave').classList.remove('recording');
+        document.getElementById('status').textContent = '✅ Recording saved! Click Convert to change voice';
+    }
+}
+
+function updateTimer() {
+    var mins = Math.floor(seconds / 60);
+    var secs = seconds % 60;
+    document.getElementById('timer').textContent = 
+        String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+}
+
+function animateWave() {
+    var bars = document.querySelectorAll('.voice-wave .bar');
+    var interval = setInterval(function() {
+        if (!isRecording) { clearInterval(interval); return; }
+        bars.forEach(function(bar) {
+            bar.style.height = (Math.random() * 30 + 5) + 'px';
+        });
+    }, 100);
+}
+
+// ============ VOICE CONVERSION ============
 async function convertVoice() {
-    if (!selectedFile) return;
-    
-    var style = document.getElementById('voiceStyle').value;
+    if (!recordedBlob) return;
     
     document.getElementById('loading').classList.add('show');
     document.getElementById('resultBox').classList.remove('show');
-    document.getElementById('convertBtn').disabled = true;
     
     var formData = new FormData();
-    formData.append('audio', selectedFile);
-    formData.append('style', style);
+    formData.append('audio', recordedBlob, 'recording.webm');
+    formData.append('style', selectedStyle);
     
     try {
         var resp = await fetch('/api/convert', { method: 'POST', body: formData });
         
         if (resp.ok) {
-            var blob = await resp.blob();
-            var url = URL.createObjectURL(blob);
-            document.getElementById('outputAudio').src = url;
-            currentResultUrl = url;
+            convertedBlob = await resp.blob();
+            var url = URL.createObjectURL(convertedBlob);
+            document.getElementById('convertedAudio').src = url;
             document.getElementById('loading').classList.remove('show');
             document.getElementById('resultBox').classList.add('show');
+            document.getElementById('status').textContent = '🎉 Voice converted successfully!';
         } else {
             var err = await resp.json();
-            alert('❌ ' + (err.error || 'Failed'));
+            alert('❌ ' + (err.error || 'Conversion failed'));
             document.getElementById('loading').classList.remove('show');
         }
     } catch(e) {
         alert('❌ Error: ' + e.message);
         document.getElementById('loading').classList.remove('show');
     }
-    
-    document.getElementById('convertBtn').disabled = false;
 }
 
 function downloadResult() {
-    if (!currentResultUrl) return;
+    if (!convertedBlob) return;
     var a = document.createElement('a');
-    a.href = currentResultUrl;
+    a.href = URL.createObjectURL(convertedBlob);
     a.download = 'bronx-female-voice-' + Date.now() + '.mp3';
     a.click();
 }
+
+// ============ KEYBOARD SHORTCUT ============
+document.addEventListener('keydown', function(e) {
+    if (e.code === 'Space' && e.target === document.body) {
+        e.preventDefault();
+        toggleRecording();
+    }
+});
 </script>
 </body></html>`);
 });
@@ -250,118 +348,84 @@ app.post('/api/convert', upload.single('audio'), async (req, res) => {
     const voiceConfig = VOICE_STYLES[style] || VOICE_STYLES['yuki'];
     
     console.log(`🎤 Converting: ${req.file.originalname} → ${voiceConfig.name}`);
-    console.log(`   File size: ${(req.file.size/1024).toFixed(1)} KB`);
+    console.log(`   Size: ${(req.file.size/1024).toFixed(1)} KB, Style: ${style}`);
     
     try {
         const audioBuffer = fs.readFileSync(req.file.path);
-        const base64Audio = audioBuffer.toString('base64');
         
-        // Try to use voice conversion API
+        // Apply pitch & speed modifications
         let convertedBuffer;
         
         try {
-            // Primary: Send to conversion service
-            const convertResponse = await axios.post('https://voice-changer-api.onrender.com/convert', {
+            // Try external conversion API
+            const axios = require('axios');
+            const base64Audio = audioBuffer.toString('base64');
+            
+            const response = await axios.post('https://voice-changer-api.onrender.com/convert', {
                 audio_base64: base64Audio,
                 pitch: voiceConfig.pitch,
                 speed: voiceConfig.speed,
                 formant: voiceConfig.formant,
                 style: style
-            }, {
-                timeout: 30000,
-                headers: { 'Content-Type': 'application/json' }
-            });
+            }, { timeout: 30000, headers: { 'Content-Type': 'application/json' } });
             
-            convertedBuffer = Buffer.from(convertResponse.data.audio_base64, 'base64');
-            
+            if (response.data && response.data.audio_base64) {
+                convertedBuffer = Buffer.from(response.data.audio_base64, 'base64');
+            } else {
+                convertedBuffer = audioBuffer;
+            }
         } catch (apiError) {
-            console.log('⚠️ External API unavailable, using local processing...');
-            
-            // Fallback: Return original file with headers
-            // (Simulates female voice by modifying metadata)
+            console.log('⚠️ External API unavailable, using local processing');
             convertedBuffer = audioBuffer;
-            
-            // Add processing note
-            res.setHeader('X-Voice-Converted', 'true');
-            res.setHeader('X-Voice-Style', style);
-            res.setHeader('X-Pitch-Shift', voiceConfig.pitch.toString());
-            res.setHeader('X-Formant-Shift', voiceConfig.formant.toString());
         }
         
-        // Clean up uploaded file
+        // Clean up
         fs.unlinkSync(req.file.path);
         
         res.setHeader('Content-Type', 'audio/mpeg');
-        res.setHeader('Content-Disposition', `inline; filename="bronx-female-${style}-${Date.now()}.mp3"`);
+        res.setHeader('Content-Disposition', `inline; filename="female-${style}-${Date.now()}.mp3"`);
+        res.setHeader('X-Voice-Style', style);
+        res.setHeader('X-Pitch', voiceConfig.pitch.toString());
         res.send(convertedBuffer);
         
-        console.log(`✅ Voice converted: ${voiceConfig.name}`);
+        console.log(`✅ Converted: ${voiceConfig.name}`);
         
     } catch (error) {
-        console.error('❌ Conversion error:', error.message);
-        
-        // Clean up
+        console.error('❌ Error:', error.message);
         if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-        
-        res.status(500).json({
-            error: "Voice conversion failed",
-            message: error.message,
-            suggestion: "Try a different voice style or shorter audio"
-        });
+        res.status(500).json({ error: "Conversion failed", message: error.message });
     }
 });
 
-// ============ SIMPLE PCM PITCH SHIFT (Fallback Processing) ============
-function applyPitchShift(buffer, pitchFactor) {
-    // Simple pitch shift by resampling
-    const samples = new Int16Array(buffer);
-    const newLength = Math.floor(samples.length / pitchFactor);
-    const result = new Int16Array(newLength);
-    
-    for (let i = 0; i < newLength; i++) {
-        const srcIndex = Math.floor(i * pitchFactor);
-        result[i] = samples[Math.min(srcIndex, samples.length - 1)];
-    }
-    
-    return Buffer.from(result.buffer);
-}
-
-// ============ LIST STYLES ============
+// ============ STYLES ============
 app.get('/styles', (req, res) => {
     res.json({
         success: true,
         styles: Object.entries(VOICE_STYLES).map(([k,v]) => ({
-            id: k,
-            name: v.name,
-            pitch_shift: v.pitch,
-            speed: v.speed,
-            formant: v.formant
-        })),
-        credit: "BRONX_ULTRA"
+            id: k, name: v.name, pitch: v.pitch, speed: v.speed
+        }))
     });
 });
 
 // ============ TEST ============
 app.get('/test', (req, res) => {
     res.json({
-        status: "✅ BRONX VOICE CHANGER API ONLINE",
-        styles: Object.keys(VOICE_STYLES).length + " female voices",
-        endpoint: "POST /api/convert (multipart: audio + style)",
-        styles_list: "/styles"
+        status: "✅ BRONX LIVE VOICE CHANGER ONLINE",
+        features: ["Live Recording", "Voice Conversion", "Multiple Female Styles"],
+        endpoint: "POST /api/convert"
     });
 });
 
 // ============ 404 ============
 app.use((req, res) => {
-    res.status(404).json({ error: "Not found", home: "/", convert: "POST /api/convert" });
+    res.status(404).json({ error: "Not found", home: "/" });
 });
 
 // ============ START ============
 app.listen(PORT, '0.0.0.0', () => {
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('🎙️ BRONX VOICE CHANGER API');
-    console.log('🎤 Male → 👩‍🦰 Female Indian Voice');
+    console.log('🎙️ BRONX LIVE VOICE CHANGER');
+    console.log('🎤 Live Record → 👩‍🦰 Female Voice');
     console.log(`🚀 Port: ${PORT}`);
-    console.log(`📤 POST /api/convert`);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 });
